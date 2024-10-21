@@ -10,58 +10,94 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 async function setupChain() {
-  const pinecone = new Pinecone({
-    apiKey: process.env.PINECONE_API_KEY!,
-  });
+  try {
+    console.log("Starting chain setup...");
+    
+    console.log("Initializing Pinecone...");
+    const pinecone = new Pinecone({
+      apiKey: process.env.PINECONE_API_KEY!,
+    });
+    console.log("Pinecone initialized");
 
-  const pineconeIndex = pinecone.Index('connect');
+    console.log("Getting Pinecone index...");
+    const pineconeIndex = pinecone.Index('connect');
+    console.log("Pinecone index retrieved");
 
-  const embeddings = new OpenAIEmbeddings();
-  const vectorStore = await PineconeStore.fromExistingIndex(embeddings, { pineconeIndex });
+    console.log("Setting up embeddings...");
+    const embeddings = new OpenAIEmbeddings();
+    console.log("Embeddings set up");
 
-  const model = new ChatOpenAI({
-    modelName: "gpt-4o-mini",
-    temperature: 0,
-  });
+    console.log("Creating vector store...");
+    const vectorStore = await PineconeStore.fromExistingIndex(embeddings, { pineconeIndex });
+    console.log("Vector store created");
 
-  const prompt = ChatPromptTemplate.fromTemplate(`
-    Use the following pieces of context to answer the question at the end. 
-    If you don't know the answer, just say "Sorry, I don't know how to answer that. I can only answer questions about PDQ Connect. Can you restate your question?", don't try to make up an answer.
+    console.log("Initializing ChatOpenAI model...");
+    const model = new ChatOpenAI({
+      modelName: "gpt-4",
+      temperature: 0,
+    });
+    console.log("ChatOpenAI model initialized");
 
-    {context}
+    console.log("Creating prompt template...");
+    const prompt = ChatPromptTemplate.fromTemplate(`
+      Use the following pieces of context to answer the question at the end. 
+      If you don't know the answer, just say "Sorry, I don't know how to answer that. I can only answer questions about PDQ Connect. Can you restate your question?", don't try to make up an answer.
 
-    Question: {input}
-    Answer:`
-  );
+      {context}
 
-  const documentChain = await createStuffDocumentsChain({
-    llm: model,
-    prompt,
-  });
+      Question: {input}
+      Answer:`
+    );
+    console.log("Prompt template created");
 
-  return createRetrievalChain({
-    combineDocsChain: documentChain,
-    retriever: vectorStore.asRetriever(),
-  });
+    console.log("Creating document chain...");
+    const documentChain = await createStuffDocumentsChain({
+      llm: model,
+      prompt,
+    });
+    console.log("Document chain created");
+
+    console.log("Creating retrieval chain...");
+    const retrievalChain = createRetrievalChain({
+      combineDocsChain: documentChain,
+      retriever: vectorStore.asRetriever(),
+    });
+    console.log("Retrieval chain created");
+
+    console.log("Chain setup completed successfully");
+    return retrievalChain;
+  } catch (error) {
+    console.error("Error in setupChain:", error);
+    throw error;
+  }
 }
 
 let chain: Awaited<ReturnType<typeof createRetrievalChain>> | null = null;
 
 export async function answerQuestion(question: string): Promise<string> {
   try {
+    console.log("answerQuestion called with:", question);
+    
     if (!chain) {
-      console.log("Setting up chain...");
+      console.log("Chain not initialized, setting up...");
       chain = await setupChain();
+      console.log("Chain setup completed");
     }
-    console.log("Invoking chain with question:", question);
+
+    console.log("Invoking chain...");
     const response = await chain.invoke({
       input: question,
     });
+    console.log("Chain invoked successfully");
+
     console.log("Raw response:", response);
     return response.answer as string;
   } catch (error) {
-    console.error("Error answering question:", error);
-    return "I'm sorry, but I encountered an error while trying to answer your question.";
+    console.error("Error in answerQuestion:", error);
+    if (error instanceof Error) {
+      return `I'm sorry, but I encountered an error while trying to answer your question: ${error.message}`;
+    }
+    return "I'm sorry, but I encountered an unknown error while trying to answer your question.";
   }
 }
 

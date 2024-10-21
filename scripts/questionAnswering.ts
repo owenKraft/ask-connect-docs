@@ -26,7 +26,7 @@ async function setupChain() {
 
   const prompt = ChatPromptTemplate.fromTemplate(`
     Use the following pieces of context to answer the question at the end. 
-    If you don't know the answer, just say that you don't know, don't try to make up an answer.
+    If you don't know the answer, just say "Sorry, I don't know how to answer that. I can only answer questions about PDQ Connect. Can you restate your question?", don't try to make up an answer.
 
     {context}
 
@@ -50,11 +50,14 @@ let chain: Awaited<ReturnType<typeof createRetrievalChain>> | null = null;
 export async function answerQuestion(question: string): Promise<string> {
   try {
     if (!chain) {
+      console.log("Setting up chain...");
       chain = await setupChain();
     }
+    console.log("Invoking chain with question:", question);
     const response = await chain.invoke({
       input: question,
     });
+    console.log("Raw response:", response);
     return response.answer as string;
   } catch (error) {
     console.error("Error answering question:", error);

@@ -141,7 +141,7 @@ export default function ChatInterface() {
                 <div className="prose prose-sm">
                   <ReactMarkdown
                     components={{
-                      a: ({ node, ...props }) => (
+                      a: ({ ...props }) => (
                         <a target="_blank" rel="noopener noreferrer" {...props} />
                       ),
                     }}

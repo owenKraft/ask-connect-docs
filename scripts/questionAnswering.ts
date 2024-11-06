@@ -53,7 +53,6 @@ async function setupChain() {
     const documentChain = await createStuffDocumentsChain({
       llm: model,
       prompt,
-      document_variable_name: "context",
     });
 
     // Create the retrieval chain

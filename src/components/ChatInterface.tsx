@@ -4,6 +4,10 @@ import { useState, FormEvent } from 'react'
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import ReactMarkdown from 'react-markdown'
+import Image from 'next/image'
+
+const USE_STREAMING = process.env.NEXT_PUBLIC_USE_STREAMING === 'true';
 
 export default function ChatInterface() {
   const [input, setInput] = useState('')
@@ -12,6 +16,9 @@ export default function ChatInterface() {
   const [isThinking, setIsThinking] = useState(false)
 
   const handleSubmit = async (e: FormEvent) => {
+    if (USE_STREAMING) {
+      return handleStreamingSubmit(e);
+    }
     e.preventDefault()
     console.log('Submitted:', input)
     
@@ -44,6 +51,49 @@ export default function ChatInterface() {
     }
   }
 
+  const handleStreamingSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    console.log('Submitted (streaming):', input)
+    
+    const currentQuestion = input
+    setInput('')
+    setQuestion(currentQuestion)
+    setAnswer('')
+    setIsThinking(true)
+
+    try {
+      const response = await fetch('/api/answer', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          question: currentQuestion,
+          streaming: true 
+        }),
+      })
+
+      if (!response.ok) throw new Error('Network response was not ok')
+      if (!response.body) throw new Error('No response body')
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        
+        const chunk = decoder.decode(value, { stream: true })
+        setAnswer(prev => prev + chunk)
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      setAnswer('An error occurred while fetching the answer.')
+    } finally {
+      setIsThinking(false)
+    }
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -55,7 +105,15 @@ export default function ChatInterface() {
     <div className="flex justify-center items-center min-h-screen">
       <Card className="w-full max-w-md shadow-none bg-transparent border-none">
         <CardHeader className="pb-2">
-          <CardTitle className="text-2xl font-bold text-center">Ask Connect docs</CardTitle>
+          <div className="flex items-center gap-2">
+            <Image 
+              src="/PDQ_Connect_icon_nav.svg"
+              alt="PDQ Connect Icon"
+              width={20}
+              height={20}
+            />
+            <CardTitle className="text-2xl font-bold">Ask Connect docs</CardTitle>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4 pt-2">
           <form onSubmit={handleSubmit} className="flex gap-2">
@@ -77,18 +135,27 @@ export default function ChatInterface() {
               </CardContent>
             </Card>
           )}
-          {isThinking && (
+          {answer && (
             <Card className="bg-gray-100">
               <CardContent>
-                <p className="text-gray-400 italic">Thinking...</p>
+                <div className="prose prose-sm">
+                  <ReactMarkdown
+                    components={{
+                      a: ({ node, ...props }) => (
+                        <a target="_blank" rel="noopener noreferrer" {...props} />
+                      ),
+                    }}
+                  >
+                    {answer}
+                  </ReactMarkdown>
+                </div>
               </CardContent>
             </Card>
           )}
-          {!isThinking && answer && (
+          {isThinking && !answer && (
             <Card className="bg-gray-100">
               <CardContent>
-                <p className="font-semibold">Connect docs:</p>
-                <p>{answer}</p>
+                <p className="text-gray-400 italic">Thinking...</p>
               </CardContent>
             </Card>
           )}

@@ -8,8 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "index-docs": "npx ts-node scripts/indexDocs.ts",
-    "start:server": "node -r ts-node/register server/server.ts",
-    "dev:server": "nodemon --watch 'server/**/*.ts' --exec 'ts-node' server/server.ts"
+    "start:server": "tsc -p tsconfig.server.json && node dist/server/server.js",
+    "dev:server": "nodemon --watch 'server/**/*.ts' --exec 'ts-node -P tsconfig.server.json' server/server.ts"
   },
   "dependencies": {
     "@langchain/core": "^0.3.13",
@@ -37,12 +37,14 @@
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "react": "^18",
     "react-dom": "^18",
+    "react-markdown": "^9.0.1",
     "tailwind-merge": "^2.5.4",
     "tailwindcss-animate": "^1.0.7",
     "tiktoken": "^1.0.17",
     "xml2js": "^0.6.2"
   },
   "devDependencies": {
+    "@tailwindcss/typography": "^0.5.15",
     "@types/express": "^5.0.0",
     "@types/node": "^20.16.12",
     "@types/react": "^18",

@@ -1,108 +1,139 @@
-import { ChatOpenAI } from "@langchain/openai";
-import { OpenAIEmbeddings } from "@langchain/openai";
-import { PineconeStore } from "@langchain/pinecone";
-import { Pinecone } from "@pinecone-database/pinecone";
-import { createRetrievalChain } from "langchain/chains/retrieval";
-import { createStuffDocumentsChain } from "langchain/chains/combine_documents";
-import { ChatPromptTemplate } from "@langchain/core/prompts";
-import dotenv from 'dotenv';
+import { OpenAIEmbeddings } from '@langchain/openai';
+import { Pinecone } from '@pinecone-database/pinecone';
+import { PineconeStore } from '@langchain/pinecone';
+import { ChatOpenAI } from '@langchain/openai';
+import { ChatPromptTemplate } from '@langchain/core/prompts';
+import { createStuffDocumentsChain } from 'langchain/chains/combine_documents';
+import { createRetrievalChain } from 'langchain/chains/retrieval';
 
-dotenv.config();
+let embeddings: OpenAIEmbeddings | null = null;
+let vectorStore: PineconeStore | null = null;
+let chain: any = null;
 
 async function setupChain() {
   try {
     console.log("Starting chain setup...");
     
-    console.log("Initializing Pinecone...");
-    const pinecone = new Pinecone({
-      apiKey: process.env.PINECONE_API_KEY!,
-    });
-    console.log("Pinecone initialized");
+    if (!embeddings) {
+      console.log("Setting up embeddings...");
+      embeddings = new OpenAIEmbeddings();
+    }
 
-    console.log("Getting Pinecone index...");
-    const pineconeIndex = pinecone.Index('connect');
-    console.log("Pinecone index retrieved");
-
-    console.log("Setting up embeddings...");
-    const embeddings = new OpenAIEmbeddings();
-    console.log("Embeddings set up");
-
-    console.log("Creating vector store...");
-    const vectorStore = await PineconeStore.fromExistingIndex(embeddings, { pineconeIndex });
-    console.log("Vector store created");
+    if (!vectorStore) {
+      console.log("Initializing Pinecone...");
+      const pinecone = new Pinecone({
+        apiKey: process.env.PINECONE_API_KEY!,
+      });
+      const pineconeIndex = pinecone.Index('connect-test');
+      vectorStore = await PineconeStore.fromExistingIndex(embeddings, { pineconeIndex });
+    }
 
     console.log("Initializing ChatOpenAI model...");
     const model = new ChatOpenAI({
       modelName: "gpt-4",
       temperature: 0,
+      streaming: true,
     });
-    console.log("ChatOpenAI model initialized");
 
     console.log("Creating prompt template...");
     const prompt = ChatPromptTemplate.fromTemplate(`
-      Use the following pieces of context to answer the question at the end. 
+      You are a helpful assistant that can answer questions about PDQ Connect.
+      
+      Use the following pieces of context to answer the question at the end.
       If you don't know the answer, just say "Sorry, I don't know how to answer that. I can only answer questions about PDQ Connect. Can you restate your question?", don't try to make up an answer.
+      
+      Provide your answer directly. Do not include any source URLs or "Sources:" section in your response - these will be added automatically.
 
-      {context}
-
+      Context: {context}
       Question: {input}
-      Answer:`
-    );
-    console.log("Prompt template created");
+      Answer: `);
 
+    // Create the document chain
     console.log("Creating document chain...");
     const documentChain = await createStuffDocumentsChain({
       llm: model,
       prompt,
+      document_variable_name: "context",
     });
-    console.log("Document chain created");
 
+    // Create the retrieval chain
     console.log("Creating retrieval chain...");
-    const retrievalChain = createRetrievalChain({
+    const retrieverChain = await createRetrievalChain({
       combineDocsChain: documentChain,
       retriever: vectorStore.asRetriever(),
     });
-    console.log("Retrieval chain created");
 
-    console.log("Chain setup completed successfully");
-    return retrievalChain;
+    return retrieverChain;
   } catch (error) {
     console.error("Error in setupChain:", error);
     throw error;
   }
 }
 
-let chain: Awaited<ReturnType<typeof createRetrievalChain>> | null = null;
-
-export async function answerQuestion(question: string): Promise<string> {
+export async function answerQuestion(question: string, streaming = false) {
   try {
-    console.log("answerQuestion called with:", question);
-    
+    console.log("Starting answer generation...");
     if (!chain) {
       console.log("Chain not initialized, setting up...");
       chain = await setupChain();
       console.log("Chain setup completed");
     }
 
-    console.log("Invoking chain...");
-    const response = await chain.invoke({
-      input: question,
-    });
-    console.log("Chain invoked successfully");
+    if (streaming) {
+      console.log("Starting streaming response...");
+      const encoder = new TextEncoder();
+      let sources = new Set();
+      let hasProcessedContext = false;
 
-    console.log("Raw response:", response);
-    return response.answer as string;
+      return new ReadableStream({
+        async start(controller) {
+          try {
+            const stream = await chain.stream({
+              input: question,
+            });
+
+            for await (const chunk of stream) {
+              // Process context only once at the beginning
+              if (!hasProcessedContext && chunk.context) {
+                chunk.context.forEach((doc: any) => {
+                  if (doc.metadata?.source) {
+                    sources.add(doc.metadata.source);
+                  }
+                });
+                hasProcessedContext = true;
+                continue;
+              }
+
+              // Only process answer chunks
+              if (chunk.answer !== undefined) {
+                controller.enqueue(encoder.encode(chunk.answer));
+              }
+            }
+
+            // After all chunks are processed, send sources
+            if (sources.size > 0) {
+              const sourcesText = `\n\n**Sources:**\n${Array.from(sources)
+                .map(url => `- [${url}](${url})`)
+                .join('\n')}`;
+              controller.enqueue(encoder.encode(sourcesText));
+            }
+
+            controller.close();
+          } catch (error) {
+            console.error("Streaming error:", error);
+            controller.error(error);
+          }
+        }
+      });
+    } else {
+      // Non-streaming response remains the same
+      const response = await chain.invoke({
+        input: question,
+      });
+      return response.answer;
+    }
   } catch (error) {
     console.error("Error in answerQuestion:", error);
-    if (error instanceof Error) {
-      return `I'm sorry, but I encountered an error while trying to answer your question: ${error.message}`;
-    }
-    return "I'm sorry, but I encountered an unknown error while trying to answer your question.";
+    throw error;
   }
 }
-
-// Example usage
-// const question = "What is PDQ Deploy?";
-// const answer = await answerQuestion(question);
-// console.log("Question:", question);
-// console.log("Answer:", answer);

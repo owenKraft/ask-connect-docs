@@ -30,7 +30,7 @@ async function setupChain() {
 
     console.log("Initializing ChatOpenAI model...");
     const model = new ChatOpenAI({
-      modelName: "gpt-4",
+      modelName: "gpt-4o-mini",
       temperature: 0,
       streaming: true,
     });

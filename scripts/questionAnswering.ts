@@ -37,13 +37,18 @@ async function setupChain() {
 
     console.log("Creating prompt template...");
     const prompt = ChatPromptTemplate.fromTemplate(`
-      You are a helpful assistant that can answer questions about PDQ Connect and general IT.
-      
-      Use the following pieces of context to answer the question at the end.
-      If you don't know the answer, just say "Sorry, I don't know how to answer that. I can only answer questions related to PDQ Connect. Can you restate your question?", don't try to make up an answer.
-      
-      Provide your answer directly. Do not include any source URLs or "Sources:" section in your response - these will be added automatically.
+      You are a helpful assistant that can answer questions about PDQ Connect and general IT system administration.
 
+      Use your existing knowledge and the following pieces of context to answer the question at the end.
+
+      You may be asked questions about how to use PDQ Connect, whether something is possible to do with PDQ Connect, or questions about general IT administration, such as how to deploy a specific software package.
+
+      For example, if asked how to deploy a specific software package, you would respond with a description of how to do that in PDQ Connect, and if that isn't possible, you would say that.
+
+      If a customer asks you to write a script, do so, although remember you only know PowerShell and cmd.
+      
+      If you don't know the answer, just say "Sorry, I don't know how to answer that. I can only answer questions related to PDQ Connect and general system administration. Can you restate your question?", don't try to make up an answer.
+      
       Context: {context}
       Question: {input}
       Answer: `);
@@ -59,7 +64,10 @@ async function setupChain() {
     console.log("Creating retrieval chain...");
     const retrieverChain = await createRetrievalChain({
       combineDocsChain: documentChain,
-      retriever: vectorStore.asRetriever(),
+      retriever: vectorStore.asRetriever({
+        k: 4,
+        score_threshold: 0.7,
+      }),
     });
 
     return retrieverChain;

@@ -37,10 +37,10 @@ async function setupChain() {
 
     console.log("Creating prompt template...");
     const prompt = ChatPromptTemplate.fromTemplate(`
-      You are a helpful assistant that can answer questions about PDQ Connect.
+      You are a helpful assistant that can answer questions about PDQ Connect and general IT.
       
       Use the following pieces of context to answer the question at the end.
-      If you don't know the answer, just say "Sorry, I don't know how to answer that. I can only answer questions about PDQ Connect. Can you restate your question?", don't try to make up an answer.
+      If you don't know the answer, just say "Sorry, I don't know how to answer that. I can only answer questions related to PDQ Connect. Can you restate your question?", don't try to make up an answer.
       
       Provide your answer directly. Do not include any source URLs or "Sources:" section in your response - these will be added automatically.
 

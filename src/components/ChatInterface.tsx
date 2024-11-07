@@ -103,7 +103,7 @@ export default function ChatInterface() {
 
   return (
     <div className="flex justify-center items-center min-h-screen">
-      <Card className="w-full max-w-md shadow-none bg-transparent border-none">
+      <Card className="w-full max-w-xl shadow-none bg-transparent border-none">
         <CardHeader className="pb-2">
           <div className="flex items-center gap-2">
             <Image 

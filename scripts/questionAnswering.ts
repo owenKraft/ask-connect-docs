@@ -24,7 +24,7 @@ async function setupChain() {
       const pinecone = new Pinecone({
         apiKey: process.env.PINECONE_API_KEY!,
       });
-      const pineconeIndex = pinecone.Index('connect-test');
+      const pineconeIndex = pinecone.Index('pdq-all-test');
       vectorStore = await PineconeStore.fromExistingIndex(embeddings, { pineconeIndex });
     }
 

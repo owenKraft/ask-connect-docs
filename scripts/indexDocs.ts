@@ -56,7 +56,7 @@ async function main() {
     apiKey: process.env.PINECONE_API_KEY!,
   });
 
-  const pineconeIndex = pinecone.Index('connect-test');
+  const pineconeIndex = pinecone.Index('pdq-all-test');
   const embeddings = new OpenAIEmbeddings();
   
   // Create text splitter

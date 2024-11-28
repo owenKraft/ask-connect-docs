@@ -2,9 +2,9 @@ import { OpenAIEmbeddings } from '@langchain/openai';
 import { Pinecone } from '@pinecone-database/pinecone';
 import { PineconeStore } from '@langchain/pinecone';
 import { ChatOpenAI } from '@langchain/openai';
-import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { createStuffDocumentsChain } from 'langchain/chains/combine_documents';
 import { createRetrievalChain } from 'langchain/chains/retrieval';
+import { createQAPrompt } from './prompts/qaPrompt';
 
 const PINECONE_INDEX = process.env.PINECONE_INDEX || 'pdq-all-test';
 
@@ -38,22 +38,7 @@ async function setupChain() {
     });
 
     console.log("Creating prompt template...");
-    const prompt = ChatPromptTemplate.fromTemplate(`
-      You are a helpful assistant that can answer questions about PDQ Connect and general IT system administration.
-
-      You may be asked questions about how to use PDQ Connect, whether something is possible to do with PDQ Connect, or questions about general IT administration, such as how to deploy a specific software package.
-
-      For example, if asked how to deploy a specific software package, you would respond with a description of how to do that in PDQ Connect, and if that isn't possible, you would say that.
-
-      If a customer asks you to write a script, do so, although remember you only know PowerShell and cmd.
-      
-      Use the following pieces of context to answer the question at the end. Try to be as accurate as possible. Ensure your answer is a specific to PDQ Connect as possible.
-
-      If you don't know the answer, just say "Sorry, I don't know how to answer that. I can only answer questions related to PDQ Connect and general system administration. Can you restate your question?", don't try to make up an answer.
-      
-      Context: {context}
-      Question: {input}
-      Answer: `);
+    const prompt = createQAPrompt();
 
     // Create the document chain
     console.log("Creating document chain...");

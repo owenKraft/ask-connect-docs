@@ -6,6 +6,8 @@ import { ChatPromptTemplate } from '@langchain/core/prompts';
 import { createStuffDocumentsChain } from 'langchain/chains/combine_documents';
 import { createRetrievalChain } from 'langchain/chains/retrieval';
 
+const PINECONE_INDEX = process.env.PINECONE_INDEX || 'pdq-all-test';
+
 let embeddings: OpenAIEmbeddings | null = null;
 let vectorStore: PineconeStore | null = null;
 let chain: any = null;
@@ -24,7 +26,7 @@ async function setupChain() {
       const pinecone = new Pinecone({
         apiKey: process.env.PINECONE_API_KEY!,
       });
-      const pineconeIndex = pinecone.Index('pdq-all-test');
+      const pineconeIndex = pinecone.Index(PINECONE_INDEX);
       vectorStore = await PineconeStore.fromExistingIndex(embeddings, { pineconeIndex });
     }
 
@@ -39,14 +41,14 @@ async function setupChain() {
     const prompt = ChatPromptTemplate.fromTemplate(`
       You are a helpful assistant that can answer questions about PDQ Connect and general IT system administration.
 
-      Use your existing knowledge and the following pieces of context to answer the question at the end.
-
       You may be asked questions about how to use PDQ Connect, whether something is possible to do with PDQ Connect, or questions about general IT administration, such as how to deploy a specific software package.
 
       For example, if asked how to deploy a specific software package, you would respond with a description of how to do that in PDQ Connect, and if that isn't possible, you would say that.
 
       If a customer asks you to write a script, do so, although remember you only know PowerShell and cmd.
       
+      Use the following pieces of context to answer the question at the end. Try to be as accurate as possible. Ensure your answer is a specific to PDQ Connect as possible.
+
       If you don't know the answer, just say "Sorry, I don't know how to answer that. I can only answer questions related to PDQ Connect and general system administration. Can you restate your question?", don't try to make up an answer.
       
       Context: {context}
@@ -66,7 +68,6 @@ async function setupChain() {
       combineDocsChain: documentChain,
       retriever: vectorStore.asRetriever({
         k: 4,
-        score_threshold: 0.7,
       }),
     });
 

@@ -11,11 +11,18 @@ import { promisify } from 'util';
 import { get_encoding } from 'tiktoken';
 import { Document } from '@langchain/core/documents';
 import { RecursiveCharacterTextSplitter } from 'langchain/text_splitter';
+import fs from 'fs';
+import path from 'path';
 
 dotenv.config();
 
-const SITEMAP_URL = 'https://connect.pdq.com/hc/sitemap.xml';
+// const SITEMAP_URL = 'https://connect.pdq.com/hc/sitemap.xml';
+const SITEMAP_URL = 'https://www.pdq.com/sitemap.xml';
+const TARGET_URL = process.env.TARGET_URL || '';
 const DELAY_MS = 2000;
+
+type ScrapeMode = 'url' | 'sitemap' | 'both';
+const SCRAPE_MODE = (process.env.SCRAPE_MODE || 'sitemap') as ScrapeMode;
 
 const parseXml = promisify(parseString);
 
@@ -51,15 +58,39 @@ async function scrapeContent(browser: Browser, url: string): Promise<string> {
   }
 }
 
+const PINECONE_INDEX = process.env.PINECONE_INDEX || 'pdq-all-test';
+
+const LOGS_DIR = path.join(process.cwd(), 'logs');
+
+async function logScrapedUrls(urls: Array<{url: string, status: 'success' | 'failed', content?: string}>) {
+  if (!fs.existsSync(LOGS_DIR)) {
+    fs.mkdirSync(LOGS_DIR);
+  }
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const logFile = path.join(LOGS_DIR, `scrape-log-${timestamp}.json`);
+  
+  const logData = {
+    timestamp: new Date().toISOString(),
+    scrapeMode: SCRAPE_MODE,
+    totalUrls: urls.length,
+    successfulScrapes: urls.filter(u => u.status === 'success').length,
+    failedScrapes: urls.filter(u => u.status === 'failed').length,
+    urls: urls
+  };
+
+  fs.writeFileSync(logFile, JSON.stringify(logData, null, 2));
+  console.log(`Scrape log written to: ${logFile}`);
+}
+
 async function main() {
   const pinecone = new Pinecone({
     apiKey: process.env.PINECONE_API_KEY!,
   });
 
-  const pineconeIndex = pinecone.Index('pdq-all-test');
+  const pineconeIndex = pinecone.Index(PINECONE_INDEX);
   const embeddings = new OpenAIEmbeddings();
   
-  // Create text splitter
   const textSplitter = new RecursiveCharacterTextSplitter({
     chunkSize: 2000,
     chunkOverlap: 200,
@@ -69,31 +100,60 @@ async function main() {
   const browser = await puppeteer.launch({ headless: true });
 
   try {
-    const urls = await fetchSitemap(SITEMAP_URL);
-    console.log(`Starting to process ${urls.length} URLs from sitemap`);
-
     const documents: Document[] = [];
-    
-    for (const url of urls) {
-      console.log(`Processing ${url}`);
-      const content = await scrapeContent(browser, url);
+    const scrapedUrls: Array<{url: string, status: 'success' | 'failed', content?: string}> = [];
+
+    if ((SCRAPE_MODE === 'url' || SCRAPE_MODE === 'both') && TARGET_URL) {
+      console.log(`Processing single URL: ${TARGET_URL}`);
+      const content = await scrapeContent(browser, TARGET_URL);
+      
+      scrapedUrls.push({
+        url: TARGET_URL,
+        status: content ? 'success' : 'failed',
+        content: content || undefined
+      });
       
       if (content) {
-        // Split the content into smaller chunks
         const docs = await textSplitter.createDocuments(
           [content],
-          [{ source: url }]
+          [{ source: TARGET_URL }]
         );
         documents.push(...docs);
       }
+    }
+
+    if (SCRAPE_MODE === 'sitemap' || SCRAPE_MODE === 'both') {
+      const urls = await fetchSitemap(SITEMAP_URL);
+      console.log(`Processing ${urls.length} URLs from sitemap`);
       
-      await delay(DELAY_MS);
+      for (const url of urls) {
+        console.log(`Processing ${url}`);
+        const content = await scrapeContent(browser, url);
+        
+        scrapedUrls.push({
+          url: url,
+          status: content ? 'success' : 'failed',
+          content: content || undefined
+        });
+        
+        if (content) {
+          const docs = await textSplitter.createDocuments(
+            [content],
+            [{ source: url }]
+          );
+          documents.push(...docs);
+        }
+        
+        await delay(DELAY_MS);
+      }
     }
 
     console.log(`Creating embeddings for ${documents.length} documents`);
     await PineconeStore.fromDocuments(documents, embeddings, {
       pineconeIndex,
     });
+
+    await logScrapedUrls(scrapedUrls);
 
     console.log('Indexing completed successfully');
   } catch (error) {

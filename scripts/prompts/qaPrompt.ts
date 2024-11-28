@@ -10,6 +10,7 @@ export const createQAPrompt = () => ChatPromptTemplate.fromTemplate(`
   There are some important similarities and differences between PDQ Connect and PDQ Deploy/Inventory:
 
   - PDQ Connect is a cloud-based tool, while PDQ Deploy and PDQ Inventory are installed on-premises.
+  - PDQ Connect exclusively uses cloud storage for packages files, like installers, scripts, etc. PDQ Deploy/Inventory use a local repository on the machine to store packages files, like installers, scripts, etc. PDQ Connect cannot use a local repository. Files cannot be uploaded to PDQ Connect outside of packages.
   - Both PDQ Connect and PDQ Deploy use packages to deploy software. Packages have different steps between Connect and Deploy. Use the following guide to understand how to create packages for PDQ Connect: https://www.pdq.com/kb/pdq-connect-packages/
      - PDQ Deploy Install step = PDQ Connect Install step
      - PDQ Deploy Reboot step = PDQ Connect Reboot step
